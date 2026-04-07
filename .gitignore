@@ -1,0 +1,22 @@
+# PlatformIO 빌드 폴더 및 라이브러리 캐시 (절대 업로드 금지!)
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# VS Code 사용자 설정 (내 컴퓨터 환경이므로 제외)
+.vscode/
+
+# C++ 컴파일 찌꺼기 파일들
+*.o
+*.elf
+*.bin
+*.map
+*.hex
+*.a
+*.d
+
+# OS 자동 생성 쓰레기 파일
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.swp
