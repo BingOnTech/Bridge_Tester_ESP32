@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RS485 브릿지 테스트</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; max-width: 800px; margin: auto; background-color: #f0f2f5; color: #333; }
+        h2 { font-size: 1.4rem; margin-top: 0; text-align: center; color: #1a1a1a; }
+        h3 { font-size: 1.1rem; margin-bottom: 10px; border-bottom: 2px solid #eaeaea; padding-bottom: 5px; }
+        .panel { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        .panel-scan { border-left: 5px solid #008CBA; }
+        .flex-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .flex-group > * { flex: 1 1 120px; }
+        input[type="number"], input[type="text"] { padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; width: 100%; }
+        button { padding: 12px 15px; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; background: #e4e6eb; color: #050505; transition: background 0.2s; width: 100%; }
+        button:active { transform: scale(0.98); }
+        .btn-test { background: #ffffff; border: 1px solid #ced0d4; }
+        .btn-test:hover { background: #f2f2f2; }
+        .btn-scan { background: #008CBA; color: white; }
+        .btn-scan:hover { background: #007399; }
+        .btn-stop { background: #ff4d4d; color: white; margin-top: 5px; }
+        .btn-stop:hover { background: #cc0000; }
+        .log-box { background: #1e1e1e; color: #00ff00; padding: 12px; height: 350px; overflow-y: scroll; font-family: 'Consolas', monospace; border-radius: 8px; font-size: 0.9rem; line-height: 1.4; word-wrap: break-word; }
+        .desc-text { font-size: 0.85rem; color: #666; margin-bottom: 10px; line-height: 1.3; }
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .panel { padding: 12px; }
+            .flex-group > * { flex: 1 1 100%; }
+        }
+    </style>
+</head>
+<body>
+    <h2>🔌 EdgeNode 테스터기 (ESP32)</h2>
+    
+    <div class="panel">
+        <h3>1. 기본 전송 (수동)</h3>
+        <div class="flex-group">
+            <button class="btn-test" onclick="sendCommand('$$0101;')">코드 1 ($$0101;)</button>
+            <button class="btn-test" onclick="sendCommand('$$0110;')">코드 2 ($$0110;)</button>
+        </div>
+        <div class="flex-group">
+            <input type="text" id="customCmd" placeholder="직접 입력 ($$0110;)">
+            <button class="btn-test" style="background: #e4e6eb;" onclick="sendCustom()">수동 전송</button>
+        </div>
+    </div>
+
+    <div class="panel panel-scan">
+        <h3>2. 자동 스캔 모드</h3>
+        <p class="desc-text">※ 현장 설치 및 디버깅 시 보드 상태를 연속 확인합니다.</p>
+        <div class="flex-group">
+            <input type="number" id="singleScanId" placeholder="보드 ID (예: 1)" min="1" max="99">
+            <button class="btn-scan" onclick="startSingleScan()">🎯 단일 스캔</button>
+        </div>
+        <div class="flex-group" style="margin-top: 10px;">
+            <button class="btn-scan" style="flex: 2;" onclick="startCyclicScan()">🔄 순회 스캔 (자동 범위감지)</button>
+        </div>
+        <button class="btn-stop" onclick="stopScan()">🛑 모든 스캔 정지</button>
+    </div>
+
+    <h3>수신 로그</h3>
+    <div class="log-box" id="logBox"></div>
+
+    <script>
+        const logBox = document.getElementById('logBox');
+        let isScanning = false;
+
+        function appendLog(text, color = '#00ff00') {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerHTML += `<div style="color: ${color}">[${time}] ${text}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+        async function sendCommand(cmd, isAutoScan = false) {
+            if(!isAutoScan) appendLog(`송신 ➡️ ${cmd}`);
+            else appendLog(`[스캔] 송신 ➡️ ${cmd}`, '#aaaaaa');
+
+            try {
+                const res = await fetch('/api/send', { method: 'POST', body: cmd });
+                const data = await res.json();
+                
+                if (data.error) {
+                    appendLog(`오류 ❌ ${data.error}`, '#ff4d4d');
+                    return null;
+                } else {
+                    const responseText = data.response || '(응답 없음)';
+                    const color = responseText === '(응답 없음)' ? '#ffaa00' : '#00ff00';
+                    if(!isAutoScan) appendLog(`수신 ⬅️ ${responseText}`, color);
+                    else appendLog(`[스캔] 수신 ⬅️ ${responseText}`, color);
+                    return data.response;
+                }
+            } catch (err) {
+                appendLog(`서버 통신 오류 ❌ ${err.message}`, '#ff4d4d');
+                return null;
+            }
+        }
+
+        function sendCustom() {
+            const cmd = document.getElementById('customCmd').value;
+            if(cmd) sendCommand(cmd);
+        }
+
+        function stopScan() {
+            if(isScanning) {
+                isScanning = false;
+                appendLog(`[시스템] 🛑 스캔 중지됨`, '#ffaa00');
+            }
+        }
+
+        async function startSingleScan() {
+            if (isScanning) return alert("이미 스캔 진행 중입니다.");
+            let idVal = document.getElementById('singleScanId').value;
+            if (!idVal) return alert("번호를 입력하세요!");
+            
+            isScanning = true;
+            let idStr = idVal.toString().padStart(2, '0');
+            appendLog(`[시스템] 🎯 ${idStr}번 단일 스캔 시작...`, '#00bfff');
+
+            while (isScanning) {
+                await sendCommand(`$$${idStr}10;`, true);
+                await sleep(500); 
+            }
+        }
+
+        async function startCyclicScan() {
+            if (isScanning) return alert("이미 스캔 진행 중입니다.");
+            isScanning = true;
+            appendLog(`[시스템] 🔄 순회 스캔 시작...`, '#00bfff');
+
+            let currentId = 1, maxId = 99, failCount = 0;
+            let isDetectingPhase = true;
+
+            while (isScanning) {
+                let idStr = currentId.toString().padStart(2, '0');
+                let response = await sendCommand(`$$${idStr}10;`, true);
+
+                if (!response || response.trim() === '') {
+                    failCount++;
+                    if (isDetectingPhase && failCount >= 2) {
+                        maxId = Math.max(1, currentId - 2); 
+                        appendLog(`[시스템] 📌 범위 감지: 01 ~ ${maxId.toString().padStart(2, '0')}번 순회`, '#ff4d4d');
+                        isDetectingPhase = false; currentId = 1; failCount = 0;
+                        await sleep(1000); continue; 
+                    }
+                } else { failCount = 0; }
+
+                currentId++; 
+                if (!isDetectingPhase && currentId > maxId) {
+                    currentId = 1;
+                    appendLog(`[시스템] ♻️ 사이클 완료.`, '#00bfff');
+                    await sleep(1000); 
+                }
+                await sleep(200); 
+            }
+        }
+    </script>
+</body>
+</html>
