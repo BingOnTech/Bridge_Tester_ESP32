@@ -14,20 +14,20 @@ ESP32 기반 RS485 브릿지 통신 테스트 및 챔버 상태(온도, 수위, 
 ### Block Diagram
 
 ```text
-[ESP32-32D]                    [MAX485]                   [Bridge Board]
+[ESP32-32D]                    [MAX485]
  VIN (5V)   -----------------> VCC
- GND        -----------------> GND ---------------------> GND
+ GND        -----------------> GND
  GPIO 17    -----------------> DI
- GPIO 16    <--[1k]--+--<----- RO
-                     |
-                  [2.2k]
-                     |
-                    GND
+ GPIO 16    <-+-[1k]----<----- RO
+              |
+            [2.2k]
+              |
+             GND
 
  GPIO 4     -----------------> DE/RE (Short)
 
-                               A <----[10k Pull-up]-----> A (or TX)
-                               B <----[10k Pull-down]---> B (or RX)
+A <----[10k Pull-up]-----> A (or TX)
+B <----[10k Pull-down]---> B (or RX)
 
 [OLED 1 - Status]
  SDA: GPIO 21
@@ -36,6 +36,17 @@ ESP32 기반 RS485 브릿지 통신 테스트 및 챔버 상태(온도, 수위, 
 [OLED 2 - Chamber Data]
  SDA: GPIO 25
  SCL: GPIO 26
+
+[Tx LED]
+ GPIO 18
+[Rx LED]
+ GPIO 19
+
+[Buttons]
+FW 12
+DATA 13
+DOWN 14
+UP 15
 ```
 
 ### 상세 핀 맵
@@ -49,7 +60,7 @@ ESP32 기반 RS485 브릿지 통신 테스트 및 챔버 상태(온도, 수위, 
 
 ## 3. 소프트웨어 및 라이브러리
 
-- 개발 환경: VS Code + PlatformIO
+- 개발 환경: VS Code + PlatformIOF
 - 프레임워크: Arduino
 - 필요 라이브러리 (platformio.ini 종속성):
   - adafruit/Adafruit GFX Library

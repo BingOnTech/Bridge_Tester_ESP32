@@ -4,6 +4,7 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <LittleFS.h>
 
 // ---------------------------------------------------------
 // 1. 설정 영역
@@ -14,11 +15,16 @@ const char *password = "";
 // ---------------------------------------------------------
 // 1. 32D용 핀 정의 (D16, D17 하드웨어 UART2 사용)
 // ---------------------------------------------------------
-#define RX_PIN 16   // RX2
-#define TX_PIN 17   // TX2
-#define DE_RE_PIN 4 // D4
-#define TX_LED 18   // D18
-#define RX_LED 19   // D19
+#define RX_PIN 16
+#define TX_PIN 17
+#define DE_RE_PIN 4
+#define TX_LED 18
+#define RX_LED 19
+
+#define BTN_FW 12
+#define BTN_DATA 13
+#define BTN_DOWN 14
+#define BTN_UP 15
 
 // RS485 통신에 Serial2 사용 (ESP32-32D 전용)
 #define RS485Serial Serial2
@@ -32,7 +38,10 @@ TwoWire I2C_Two = TwoWire(1); // 2번 채널
 
 Adafruit_SSD1306 display1(SCREEN_WIDTH, SCREEN_HEIGHT, &I2C_One, OLED_RESET);
 Adafruit_SSD1306 display2(SCREEN_WIDTH, SCREEN_HEIGHT, &I2C_Two, OLED_RESET);
+
 WebServer server(80);
+
+int currentID = 1;
 
 // ---------------------------------------------------------
 // 2. 프론트엔드 HTML (모바일 반응형, 스캔 기능 탑재)
@@ -178,7 +187,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 let response = await sendCommand(`$$${idStr}10;`, true);
 
                 if (!response || response.trim() === '') {
-                    failCoSunt++;
+                    failCount++;
                     if (isDetectingPhase && failCount >= 2) {
                         maxId = Math.max(1, currentId - 2); 
                         appendLog(`[시스템] 📌 범위 감지: 01 ~ ${maxId.toString().padStart(2, '0')}번 순회`, '#ff4d4d');
@@ -241,7 +250,7 @@ void updateChamberOLED(String rawData)
         display2.println("[Chamber Status]");
         display2.println("---------------------");
 
-        // 3. 비트 파싱 및 디스플레이 출력 (재호님의 파이썬 로직 이식!)
+        // 3. 비트 파싱 및 디스플레이 출력
         for (int i = 0; i < 4; i++)
         {
             // 각 챔버당 4비트(1개의 16진수 문자)씩 차지한다고 가정 (왼쪽부터 CH1)
@@ -287,10 +296,15 @@ void setup()
     digitalWrite(TX_LED, LOW);
     digitalWrite(RX_LED, LOW);
 
+    pinMode(BTN_UP, INPUT_PULLUP);
+    pinMode(BTN_DOWN, INPUT_PULLUP);
+    pinMode(BTN_FW, INPUT_PULLUP);
+    pinMode(BTN_DATA, INPUT_PULLUP);
+
     // OLED 초기화
     // I2C 2개 독립 초기화
-    I2C_One.begin(21, 22); // 기존 OLED 핀
-    I2C_Two.begin(25, 26); // 신규 OLED 핀 (25번, 26번 빵판에 꽂으세요)
+    I2C_One.begin(21, 22);
+    I2C_Two.begin(25, 26);
 
     // 디스플레이 1 초기화
     if (!display1.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -351,11 +365,12 @@ void setup()
       if(RS485Serial.available()) {
         rawResponse += (char)RS485Serial.read();
       }
+      delay(1); // ESP32 Watchdog Timer(WDT) 트리거 방지 및 시스템 안정성 확보
     }
     digitalWrite(RX_LED, LOW);
     // ----------------------------
 
-    // 🌟 실전용 데이터 정제 (제어 문자 완전 삭제)
+    // 실전용 데이터 정제 (제어 문자 완전 삭제)
     String cleanResponse = "";
     for(int i=0; i < rawResponse.length(); i++) {
       char c = rawResponse[i];
@@ -367,10 +382,22 @@ void setup()
         cleanResponse += c;
       }
     }
-    // 🌟🌟 핵심 추가: OLED 2번 화면 업데이트 호출! 🌟🌟
+
+    Serial.println("[RS485 RX Clean] " + cleanResponse); // 화면 표시용으로 정제된 데이터 출력
+
+    // OLED 2번 화면 업데이트 호출!
     if(cleanResponse.length() > 0) {
-        updateChamberOLED(cleanResponse); 
+        // 수신된 문자열에 "F/W:" 가 포함되어 있는지 검사
+        if (cleanResponse.indexOf("F/W:") != -1) {
+            // 펌웨어 정보면 OLED 2번을 비움
+            display2.clearDisplay();
+            display2.display();
+        } else {
+            // 일반 데이터면 OLED 2번 갱신
+            updateChamberOLED(cleanResponse); 
+        }
     }
+    
     // 정제된 데이터 전송
     String jsonResponse = "{\"request\":\"" + command + "\", \"response\":\"" + cleanResponse + "\"}";
     server.send(200, "application/json", jsonResponse);
@@ -384,4 +411,31 @@ void setup()
 void loop()
 {
     server.handleClient();
+
+    if (digitalRead(BTN_UP) == LOW)
+    {
+        Serial.println("BTN_UP pressed");
+        delay(200); // 디바운싱 (중복 입력 방지)
+    }
+
+    // BTN_DOWN (GPIO 13)
+    if (digitalRead(BTN_DOWN) == LOW)
+    {
+        Serial.println("BTN_DOWN pressed");
+        delay(200);
+    }
+
+    // BTN_DATA (GPIO 14)
+    if (digitalRead(BTN_DATA) == LOW)
+    {
+        Serial.println("BTN_DATA pressed");
+        delay(200);
+    }
+
+    // BTN_FW (GPIO 15)
+    if (digitalRead(BTN_FW) == LOW)
+    {
+        Serial.println("BTN_FW pressed");
+        delay(200);
+    }
 }
