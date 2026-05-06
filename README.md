@@ -29,24 +29,19 @@ ESP32 기반 RS485 브릿지 통신 테스트 및 챔버 상태(온도, 수위, 
 A <----[10k Pull-up]-----> A (or TX)
 B <----[10k Pull-down]---> B (or RX)
 
-[OLED 1 - Status]
- SDA: GPIO 21
- SCL: GPIO 22
+[ 디스플레이 (I2C 분리) ]
+OLED 1 (Status)  : SDA(GPIO 21), SCL(GPIO 22)
+OLED 2 (Chamber) : SDA(GPIO 25), SCL(GPIO 26)
 
-[OLED 2 - Chamber Data]
- SDA: GPIO 25
- SCL: GPIO 26
+[ 상태 LED ]
+GPIO 18 --------> [Resistor] ---> TX LED (BLUE)
+GPIO 19 --------> [Resistor] ---> RX LED (RED)
 
-[Tx LED]
- GPIO 18
-[Rx LED]
- GPIO 19
-
-[Buttons]
-FW 12
-DATA 13
-DOWN 14
-UP 15
+[ 사용자 조작 버튼 (Internal Pull-up) ]
+GPIO 12 (BTN_FW)   ---> [Button] ---> GND
+GPIO 13 (BTN_DATA) ---> [Button] ---> GND
+GPIO 14 (BTN_DOWN) ---> [Button] ---> GND
+GPIO 15 (BTN_UP)   ---> [Button] ---> GND
 ```
 
 ### 상세 핀 맵
